@@ -2,7 +2,10 @@ import os
 
 from PIL import Image
 import numpy as np
-from sklearn.metrics import recall_score, precision_score, f1_score
+from sklearn.metrics import recall_score, precision_score, f1_score, accuracy_score
+from sklearn.neighbors import KNeighborsClassifier
+from sklearn.tree import DecisionTreeClassifier
+from sklearn.neural_network import MLPClassifier
 import matplotlib.pyplot as plt
 
 
@@ -101,14 +104,18 @@ def show_eigenfaces(eigenfaces):
     plt.show()
 
 
-def main():
-    dataset = load_dataset()
-    train_data, train_data_labels = get_train_data(dataset, 8)
-    test_data, test_labels = get_test_data(dataset, 2)
-    eigenfaces, mean_face = pca(train_data)
+def pca_test(train_data, train_data_labels, test_data, test_labels, eigenfaces, mean_face):
     weights = eigenfaces.T.dot((train_data - mean_face).T)
-    show_eigenfaces(eigenfaces)
     predict(test_data, test_labels, train_data_labels, mean_face, eigenfaces, weights)
+
+
+def show_image(im, im_true):
+    fig, axes = plt.subplots(1, 2, sharex=True, sharey=True)
+    axes[0].imshow(im.reshape(70, 80).T, cmap="gray")
+    axes[0].set_title("Restored image")
+    axes[1].imshow(im_true.reshape(70, 80).T, cmap="gray")
+    axes[1].set_title("Original image")
+    plt.show()
 
 
 def predict(test_data, test_labels, train_data_labels, mean_face, eigenfaces, weights):
@@ -120,19 +127,113 @@ def predict(test_data, test_labels, train_data_labels, mean_face, eigenfaces, we
         best_match = np.argmin(euclidean_distance)
         y_pred.append(train_data_labels[best_match])
         y_true.append(test_labels[i])
+    print("Accuracy:", accuracy_score(y_true, y_pred))
     print("Precision:", precision_score(y_true, y_pred, average='macro'))
     print("Recall:", recall_score(y_true, y_pred, average='macro'))
+    print("F1:", f1_score(y_true, y_pred, average='macro'))
 
 
-def main_lda():
-    dataset = load_dataset()
-    train_dataset = dataset[:, :8, :]
-    train_data, train_data_labels = get_train_data(dataset, 8)
-    test_data, test_labels = get_test_data(dataset, 2)
-    eigenfaces, mean_face = lda(train_dataset)
+def lda_test(train_data, train_data_labels, test_data, test_labels, eigenfaces, mean_face):
     weights = eigenfaces.T.dot((train_data - mean_face).T)
-    show_eigenfaces(eigenfaces)
     predict(test_data, test_labels, train_data_labels, mean_face, eigenfaces, weights)
+
+
+def lda_on_mean(train_dataset, test_data, test_labels, eigenfaces, mean_face):
+    weights = get_mean_class_images(train_dataset, eigenfaces, mean_face)
+    predict(test_data, test_labels, list(range(len(weights))), mean_face, eigenfaces, weights.T)
+
+
+def pca_on_mean(train_dataset, test_data, test_labels, eigenfaces, mean_face):
+    weights = get_mean_class_images(train_dataset, eigenfaces, mean_face)
+    predict(test_data, test_labels, list(range(len(weights))), mean_face, eigenfaces, weights.T)
+
+
+def get_mean_class_images(train_dataset, fisher_faces, mean_face):
+    result_messages = []
+    for cls in train_dataset:
+        result_messages.append(fisher_faces.T.dot((cls - mean_face).mean(axis=0)))
+    return np.array(result_messages)
+
+
+def lda_k_nearest(train_data, train_data_labels, test_data, test_labels, eigenfaces, mean_face):
+    weights = eigenfaces.T.dot((train_data - mean_face).T)
+    test_data_proj = eigenfaces.T.dot((test_data - mean_face).T)
+    neigh = KNeighborsClassifier(n_neighbors=3)
+    neigh.fit(weights.T, train_data_labels)
+    prediction = neigh.predict(test_data_proj.T)
+    print("Precision:", precision_score(test_labels, prediction, average='macro', zero_division=1))
+    print("Recall:", recall_score(test_labels, prediction, average='macro', zero_division=1))
+    print("F1:", f1_score(test_labels, prediction, average='macro', zero_division=1))
+
+
+def lda_tree(train_data, train_data_labels, test_data, test_labels, eigenfaces, mean_face):
+    weights = eigenfaces.T.dot((train_data - mean_face).T)
+    test_data_proj = eigenfaces.T.dot((test_data - mean_face).T)
+    tree = DecisionTreeClassifier(max_depth=5, random_state=42)
+    tree.fit(weights.T, train_data_labels)
+    prediction = tree.predict(test_data_proj.T)
+    print("Precision:", precision_score(test_labels, prediction, average='macro', zero_division=1))
+    print("Recall:", recall_score(test_labels, prediction, average='macro', zero_division=1))
+    print("F1:", f1_score(test_labels, prediction, average='macro', zero_division=1))
+
+
+def lda_nn(train_data, train_data_labels, test_data, test_labels, eigenfaces, mean_face):
+    weights = eigenfaces.T.dot((train_data - mean_face).T)
+    test_data_proj = eigenfaces.T.dot((test_data - mean_face).T)
+    mlp = MLPClassifier(max_iter=2000, learning_rate='adaptive', random_state=42)
+    mlp.fit(weights.T, train_data_labels)
+    prediction = mlp.predict(test_data_proj.T)
+    print("Precision:", precision_score(test_labels, prediction, average='macro', zero_division=1))
+    print("Recall:", recall_score(test_labels, prediction, average='macro', zero_division=1))
+    print("F1:", f1_score(test_labels, prediction, average='macro', zero_division=1))
+
+
+def pca_k_nearest(train_data, train_data_labels, test_data, test_labels, eigenfaces, mean_face):
+    weights = eigenfaces.T.dot((train_data - mean_face).T)
+    test_data_proj = eigenfaces.T.dot((test_data - mean_face).T)
+    neigh = KNeighborsClassifier(n_neighbors=3)
+    neigh.fit(weights.T, train_data_labels)
+    prediction = neigh.predict(test_data_proj.T)
+    print("Precision:", precision_score(test_labels, prediction, average='macro', zero_division=1))
+    print("Recall:", recall_score(test_labels, prediction, average='macro', zero_division=1))
+    print("F1:", f1_score(test_labels, prediction, average='macro', zero_division=1))
+
+
+def main():
+    dataset = load_dataset()
+    train_dataset = dataset[:, :7, :]
+    train_data, train_data_labels = get_train_data(dataset, 7)
+    test_data, test_labels = get_test_data(dataset, 3)
+    eigenfaces, mean_face = pca(train_data)
+    fisherfaces, mean_fisher_face = lda(train_dataset)
+
+    # Uncomment to see graphics of faces
+    # face_to_show = 17
+    #
+    # weights = eigenfaces.T.dot((train_data - mean_face).T)
+    # weight = weights.T[face_to_show]
+    # reverse_im = eigenfaces.dot(weight) + mean_face
+    # show_image(reverse_im, train_data[face_to_show])
+    #
+    # show_eigenfaces(eigenfaces)
+    # show_eigenfaces(fisherfaces)
+
+    print("CLASSIC PCA:")
+    pca_test(train_data, train_data_labels, test_data, test_labels, eigenfaces, mean_face)
+    print("\n\nMEAN PCA:")
+    pca_on_mean(train_dataset, test_data, test_labels, eigenfaces, mean_face)
+    print("\n\nCLASSIC LDA:")
+    lda_test(train_data, train_data_labels, test_data, test_labels, fisherfaces, mean_fisher_face)
+    print("\n\nMEAN LDA:")
+    lda_on_mean(train_dataset, test_data, test_labels, fisherfaces, mean_fisher_face)
+    print("\n\nK-MEANS PCA:")
+    pca_k_nearest(train_data, train_data_labels, test_data, test_labels, eigenfaces, mean_face)
+    print("\n\nK-MEANS LDA:")
+    lda_k_nearest(train_data, train_data_labels, test_data, test_labels, fisherfaces, mean_fisher_face)
+    print("\n\nTREE LDA:")
+    lda_tree(train_data, train_data_labels, test_data, test_labels, fisherfaces, mean_fisher_face)
+    print("\n\nMLP LDA:")
+    lda_nn(train_data, train_data_labels, test_data, test_labels, fisherfaces, mean_fisher_face)
 
 
 if __name__ == '__main__':
